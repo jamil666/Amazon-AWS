@@ -1,0 +1,64 @@
+Write-Host "---------Starting new VM creation process---------" -ForegroundColor Green
+Write-Host ""
+
+# List all available AWS regions
+
+foreach ($Region in Get-AWSRegion) {
+    Write-Host $Region.Region "----" $Region.Name -ForegroundColor Green
+                                    }
+
+Write-Host ""
+
+# Set AWS region
+
+$DefaultRegion = Read-Host "Please select region: "
+
+Set-DefaultAWSRegion -Region $DefaultRegion
+
+# Set Amazon AWS credentials for future use
+
+Set-AWSCredentials -AccessKey "Your Access Key" -SecretKey "Your Secret Key" -StoreAs script_admin
+
+# Set Hostname and DisplayName for EC2 Instance
+
+$VMname = Read-Host "Please provide VM hostname: "
+
+# Get list of available Elastic IPs 
+
+$EIP = Get-EC2Address -ProfileName script_admin | select AllocationId, AssociationId, InstanceId
+
+# Get Free IP form list of Elastic IPs
+
+ForEach ($IP in $EIP) {
+   If (-not $IP.InstanceId) {$FreeIP = $IP.AllocationId}
+                      }
+
+
+# Configure Hostname, assign Elsatic IP and install software to VM. Write all commands to  WebServer.txt file.
+
+(Get-Content 'You source UserData TXT file path') | 
+    ForEach-Object {
+        $_.replace('hostname', ('hostname' + " " + $VMname)).replace('ALLOCATION_ID=', ('ALLOCATION_ID=' + $FreeIP))
+                    } | 
+                    Set-Content "Your final UserData TXT file path"
+
+
+# Name TAG for VM 
+
+$tagspec1 = new-object Amazon.EC2.Model.TagSpecification
+$tagspec1.ResourceType = "instance"
+$tagspec1.Tags.Add(@{ Key="Name"; Value=$VMname })
+
+# Volume Name TAG vor VM
+
+$tagspec2 = new-object Amazon.EC2.Model.TagSpecification
+$tagspec2.ResourceType = "volume"
+$tagspec2.Tags.Add(@{ Key="Name"; Value=$VMname })
+
+# Create new EC2 Instance
+
+New-EC2Instance -ImageId ami-e28d098d -MinCount 1 -MaxCount 1 -KeyName "Your Key Pair" -SecurityGroupId "Your Security Group ID" -InstanceType t2.micro -ProfileName sript_admin -TagSpecification $tagspec1,$tagspec2 -EncodeUserData -UserDataFile "Your final UserData TXT file path"
+
+
+Write-Host "---------End of new VM creation process---------" -ForegroundColor Green
+
